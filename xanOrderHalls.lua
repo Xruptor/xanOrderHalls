@@ -46,6 +46,9 @@ function XANORDH:ShowCharList()
 	if not _GarrisonLandingPageTab_SetTab then
 		_GarrisonLandingPageTab_SetTab = GarrisonLandingPageTab_SetTab
 	end
+	if GarrisonLandingPage and not GarrisonLandingPage:IsShown() then
+		ShowGarrisonLandingPage()
+	end
 	_GarrisonLandingPageTab_SetTab(GarrisonLandingPageTab1)
 	GarrisonLandingPageReport:Hide()
 	self.CHListFrame:Show()
@@ -679,6 +682,11 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
 	end
 end)
 
+function XANORDH:ChatCommand(input)
+	ShowGarrisonLandingPage()
+	self:Delay("ChatCommand", 0.5, function() XANORDH:ShowCharList() end)
+end
+
 function XANORDH:OnEnable()
 	self:setupDB()
 	self:HookOrderHallFrame()
@@ -686,6 +694,11 @@ function XANORDH:OnEnable()
 	for k, v in pairs(events) do
 		eventFrame:RegisterEvent(k)
 	end
+	
+	--register the slash command
+	self:RegisterChatCommand("xoh", "ChatCommand")
+	self:RegisterChatCommand("xanorderhalls", "ChatCommand")
+	self:RegisterChatCommand("xanoh", "ChatCommand")
 end
 
 function XANORDH:Delay(name, duration, callbackFunction, force)
