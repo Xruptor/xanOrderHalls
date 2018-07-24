@@ -1,8 +1,8 @@
-## Interface: 70100
+## Interface: 80000
 ## Title: xanOrderHalls
 ## Notes: A small addon to display order hall info on multiple characters.
 ## Author: Xruptor
-## Version: 1.0
+## Version: 1.1
 ## OptionalDeps: tekDebug
 ## SavedVariables: XOH_DB
 

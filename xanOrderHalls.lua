@@ -113,7 +113,8 @@ function XANORDH:getCurrentPlayerData(forceDisplay)
 	end
 
 	local iCount = 0
-	local talentTrees = C_Garrison.GetTalentTrees(LE_GARRISON_TYPE_7_0, select(3, UnitClass("player")))
+	local uiTextureKit, classAgnostic, talentTrees = C_Garrison.GetTalentTreeInfoForID(LE_GARRISON_TYPE_7_0, select(3, UnitClass("player")));
+  
 	dbplayer.info.talents = {}
 	if (talentTrees) then
 		local completeTalentID = C_Garrison.GetCompleteTalent(LE_GARRISON_TYPE_7_0)
@@ -404,7 +405,7 @@ function XANORDH:displayList()
 				end
 
 				-->>>In Progress Missions
-				if v.info.missions.inProgress then
+				if v.info.missions and v.info.missions.inProgress then
 					local missionCount = 0
 					local missionCompleted = 0
 					local ceilMissionTime = 0
@@ -459,7 +460,7 @@ function XANORDH:displayList()
 				end
 				
 				-->>>Current Missions Available
-				if v.info.missions.currentMissions then
+				if v.info.missions and v.info.missions.currentMissions then
 					local missionCount = 0
 					local rightXOffset = 0
 					
