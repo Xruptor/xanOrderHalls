@@ -1,4 +1,3 @@
-
 local XANORDH = select(2, ...) --grab the addon namespace
 XANORDH = LibStub("AceAddon-3.0"):NewAddon(XANORDH, "xanOrderHalls", "AceEvent-3.0", "AceConsole-3.0")
 local L = LibStub("AceLocale-3.0"):GetLocale("xanOrderHalls", true)
@@ -12,6 +11,7 @@ local playerClass
 local playerLevel
 local playerFaction
 local _GarrisonLandingPageTab_SetTab
+local menuFrame = CreateFrame("Frame", "xanOrderHall_DDMenu", UIParent, "UIDropDownMenuTemplate")
 
 local debugf = tekDebug and tekDebug:GetFrame("xanOrderHalls")
 
@@ -36,13 +36,30 @@ function XANORDH:setupDB()
 	if not dbplayer.class then dbplayer.class = playerClass end
 	if not dbplayer.faction then dbplayer.faction = playerFaction end
 	if not dbplayer.level then dbplayer.level = playerLevel end
-	if not dbplayer.info then dbplayer.info = {} end
 	
+	if not dbplayer.info then dbplayer.info = {} end
+	if not dbplayer.info[LE_GARRISON_TYPE_6_0] then dbplayer.info[LE_GARRISON_TYPE_6_0] = {} end  --Warlords of Draenor
+	if not dbplayer.info[LE_GARRISON_TYPE_7_0] then dbplayer.info[LE_GARRISON_TYPE_7_0] = {} end  --Legion
+	if not dbplayer.info[LE_GARRISON_TYPE_8_0] then dbplayer.info[LE_GARRISON_TYPE_8_0] = {} end  --Battle for Azeroth
+	
+end
+
+function XANORDH:HasGarrisonUnlocked()
+	--TODO: work on shipyards later
+	local hasGarrison = false
+
+	hasGarrison = hasGarrison or C_Garrison.HasGarrison(LE_GARRISON_TYPE_6_0)
+	hasGarrison = hasGarrison or C_Garrison.HasShipyard()
+	hasGarrison = hasGarrison or C_Garrison.HasGarrison(LE_GARRISON_TYPE_7_0)
+	hasGarrison = hasGarrison or C_Garrison.HasGarrison(LE_GARRISON_TYPE_8_0)
+
+	return hasGarrison
 end
 
 function XANORDH:ShowCharList()
 	if not self.CHListFrame then return end
-
+	if not self:HasGarrisonUnlocked() then return end
+	
 	if not _GarrisonLandingPageTab_SetTab then
 		_GarrisonLandingPageTab_SetTab = GarrisonLandingPageTab_SetTab
 	end
@@ -57,29 +74,85 @@ function XANORDH:ShowCharList()
 	PanelTemplates_DeselectTab(GarrisonLandingPageTab1)
 	
 	--update the data and then force a display of the character list
-	XANORDH:Delay("getCurrentPlayerData", 0.5, function() XANORDH:getCurrentPlayerData(true) end)
+	self:Delay("scanPlayerGarrisons", 0.5, function() self:scanPlayerGarrisons(true) end)
 end
 
-function XANORDH:getCurrentPlayerData(forceDisplay)
-	if not self.CHListFrame then return end
+function XANORDH:scanPlayerGarrisons(forceDisplay)
+	if not self:HasGarrisonUnlocked() then return end
+	
+	--TODO: work on shipyards later
+	local hasGarrison = false
+	
+	--Warlords of Draenor
+	if C_Garrison.HasGarrison(LE_GARRISON_TYPE_6_0) then
+		self:getCurrentPlayerData(LE_GARRISON_TYPE_6_0)
+		hasGarrison = true
+	end
+	
+	--Legion
+	if C_Garrison.HasGarrison(LE_GARRISON_TYPE_7_0) then
+		self:getCurrentPlayerData(LE_GARRISON_TYPE_7_0)
+		hasGarrison = true
+	end
+	
+	--Battle for Azeroth
+	if C_Garrison.HasGarrison(LE_GARRISON_TYPE_8_0) then
+		self:getCurrentPlayerData(LE_GARRISON_TYPE_8_0)
+		hasGarrison = true
+	end
+	
+	if forceDisplay and hasGarrison then
+		self:displayList()
+	end
+	
+end
 
-	dbplayer.info = {} --reset it, clear out old data
+function XANORDH:getCurrentPlayerData(garrisonType)
+	if not self.CHListFrame then return end
+	if not garrisonType or not C_Garrison.HasGarrison(garrisonType) then return end
+
+	dbplayer.info[garrisonType] = {} --reset it, clear out old data
 	
 	--https://github.com/tomrus88/BlizzardInterfaceCode/blob/master/Interface/AddOns/Blizzard_OrderHallUI/Blizzard_OrderHallTalents.lua
 	
-	local primaryCurrency, _ = C_Garrison.GetCurrencyTypes(LE_GARRISON_TYPE_7_0)
+	local primaryCurrency, _ = C_Garrison.GetCurrencyTypes(garrisonType)
 	local currencyName, amount, currencyTexture = GetCurrencyInfo(primaryCurrency)
-	dbplayer.info.currency = { ["name"]=currencyName, ["amount"]=amount, ["currencyTexture"]=currencyTexture }
+	dbplayer.info[garrisonType].currency = { ["name"]=currencyName, ["amount"]=amount, ["currencyTexture"]=currencyTexture }
 	
 	local championCount = C_Garrison.GetNumFollowers(LE_FOLLOWER_TYPE_GARRISON_7_0)
-	dbplayer.info.championCount = championCount
+	dbplayer.info[garrisonType].championCount = championCount
 	
-	local followerShipments = C_Garrison.GetFollowerShipments(LE_GARRISON_TYPE_7_0)
-	dbplayer.info.followers = {}
+	local buildings = C_Garrison.GetBuildings(garrisonType)
+	dbplayer.info[garrisonType].buildings = {}
+	for i = 1, #buildings do
+		local buildingID = buildings[i].buildingID
+		if ( buildingID) then
+			local name, texture, shipmentCapacity, shipmentsReady, shipmentsTotal, creationTime, duration, timeleftString, itemName, itemIcon, itemQuality, itemID = C_Garrison.GetLandingPageShipmentInfo(buildingID)
+			if ( name ) then
+				dbplayer.info[garrisonType].buildings[i] = {
+					["name"] = name,
+					["texture"] = texture,
+					["shipmentCapacity"] = shipmentCapacity,
+					["shipmentsReady"] = shipmentsReady,
+					["shipmentsTotal"] = shipmentsTotal,
+					["creationTime"] = creationTime,
+					["duration"] = duration,
+					["timeleftString"] = timeleftString,
+					["itemName"] = itemName,
+					["itemIcon"] = itemIcon,
+					["itemQuality"] = itemQuality,
+					["itemID"] = itemID,
+				}
+			end
+		end
+	end
+	
+	local followerShipments = C_Garrison.GetFollowerShipments(garrisonType)
+	dbplayer.info[garrisonType].followers = {}
 	for i = 1, #followerShipments do
 		local name, texture, shipmentCapacity, shipmentsReady, shipmentsTotal, creationTime, duration, timeleftString, _, _, _, _, followerID = C_Garrison.GetLandingPageShipmentInfoByContainerID(followerShipments[i])
 		if ( name ) then
-			dbplayer.info.followers[i] = {
+			dbplayer.info[garrisonType].followers[i] = {
 				["name"] = name,
 				["shipmentCapacity"] = shipmentCapacity,
 				["shipmentsReady"] = shipmentsReady,
@@ -93,13 +166,13 @@ function XANORDH:getCurrentPlayerData(forceDisplay)
 		end
 	end
 	
-	local looseShipments = C_Garrison.GetLooseShipments(LE_GARRISON_TYPE_7_0)
-	dbplayer.info.shipments = {}
+	local looseShipments = C_Garrison.GetLooseShipments(garrisonType)
+	dbplayer.info[garrisonType].shipments = {}
 	if (looseShipments) then
 		for i = 1, #looseShipments do
 			local name, texture, shipmentCapacity, shipmentsReady, shipmentsTotal, creationTime, duration, timeleftString, _, _, _, _, followerID = C_Garrison.GetLandingPageShipmentInfoByContainerID(looseShipments[i])
 			if ( name ) then
-				dbplayer.info.shipments[i] = {
+				dbplayer.info[garrisonType].shipments[i] = {
 					["name"] = name,
 					["shipmentsReady"] = shipmentsReady,
 					["shipmentsTotal"] = shipmentsTotal,
@@ -113,11 +186,11 @@ function XANORDH:getCurrentPlayerData(forceDisplay)
 	end
 
 	local iCount = 0
-	local uiTextureKit, classAgnostic, talentTrees = C_Garrison.GetTalentTreeInfoForID(LE_GARRISON_TYPE_7_0, select(3, UnitClass("player")));
+	local uiTextureKit, classAgnostic, talentTrees = C_Garrison.GetTalentTreeInfoForID(garrisonType, select(3, UnitClass("player")));
   
-	dbplayer.info.talents = {}
+	dbplayer.info[garrisonType].talents = {}
 	if (talentTrees) then
-		local completeTalentID = C_Garrison.GetCompleteTalent(LE_GARRISON_TYPE_7_0)
+		local completeTalentID = C_Garrison.GetCompleteTalent(garrisonType)
 		for treeIndex, tree in ipairs(talentTrees) do
 			for talentIndex, talent in ipairs(tree) do
 				local showTalent = false
@@ -129,7 +202,7 @@ function XANORDH:getCurrentPlayerData(forceDisplay)
 				end
 				if (showTalent) then
 					iCount = iCount + 1
-					dbplayer.info.talents[iCount] = {
+					dbplayer.info[garrisonType].talents[iCount] = {
 						["name"] = talent.name,
 						["isBeingResearched"] = talent.isBeingResearched,
 						["researchStartTime"] = talent.researchStartTime,
@@ -143,15 +216,15 @@ function XANORDH:getCurrentPlayerData(forceDisplay)
 	end
 
 	--https://github.com/tomrus88/BlizzardInterfaceCode/blob/master/Interface/AddOns/Blizzard_AdventureMap/AM_ZoneSummaryDataProvider.lua
-	if not dbplayer.info.missions then dbplayer.info.missions = {} end
+	if not dbplayer.info[garrisonType].missions then dbplayer.info[garrisonType].missions = {} end
 	local currentMissions = C_Garrison.GetAvailableMissions(LE_FOLLOWER_TYPE_GARRISON_7_0)
 
 	local iCount = 0
-	dbplayer.info.missions.currentMissions = {}
+	dbplayer.info[garrisonType].missions.currentMissions = {}
 	if currentMissions then
 		for i, missionInfo in pairs(currentMissions) do
 			iCount = iCount + 1
-			dbplayer.info.missions.currentMissions[iCount] = {
+			dbplayer.info[garrisonType].missions.currentMissions[iCount] = {
 				["name"] = missionInfo.name,
 				["missionID"] = missionInfo.missionID,
 				["completed"] = missionInfo.completed,
@@ -168,11 +241,11 @@ function XANORDH:getCurrentPlayerData(forceDisplay)
 
 	local inProgressMissions = C_Garrison.GetInProgressMissions(LE_FOLLOWER_TYPE_GARRISON_7_0)
 	local iCount = 0
-	dbplayer.info.missions.inProgress = {}
+	dbplayer.info[garrisonType].missions.inProgress = {}
 	if inProgressMissions then
 		for i, missionInfo in pairs(inProgressMissions) do
 			iCount = iCount + 1
-			dbplayer.info.missions.inProgress[iCount] = {
+			dbplayer.info[garrisonType].missions.inProgress[iCount] = {
 				["name"] = missionInfo.name,
 				["missionID"] = missionInfo.missionID,
 				["completed"] = missionInfo.completed,
@@ -189,9 +262,6 @@ function XANORDH:getCurrentPlayerData(forceDisplay)
 		end
 	end
 	
-	if forceDisplay then
-		XANORDH:displayList()
-	end
 end
 
 local function rgbhex(r, g, b)
@@ -252,6 +322,8 @@ function XANORDH:displayList()
 	
 	local displayTimers = {}
 	
+	local garrisonType = LE_GARRISON_TYPE_7_0
+	
 	for realm, rd in pairs(dbglobal) do
 		for k, v in pairs(rd) do
 		
@@ -262,7 +334,7 @@ function XANORDH:displayList()
 			local summary = realm
 			
 			--only work with characters that have at least one champion unlocked.  Otherwise they don't have the order hall stuff unlocked yet
-			if v.info.championCount and v.info.championCount > 0 then
+			if v.info[garrisonType].championCount and v.info[garrisonType].championCount > 0 then
 				allowPass = true
 			end
 			
@@ -272,8 +344,8 @@ function XANORDH:displayList()
 				label:SetName(playerName)
 				label.playerName = k --for sorting
 				
-				if v.info.currency then
-					summary = summary.."  "..GREEN_FONT_COLOR_CODE..">|r  "..format([[|T%s:0|t]], v.info.currency.currencyTexture).." "..v.info.currency.amount
+				if v.info[garrisonType].currency then
+					summary = summary.."  "..GREEN_FONT_COLOR_CODE..">|r  "..format([[|T%s:0|t]], v.info[garrisonType].currency.currencyTexture).." "..v.info[garrisonType].currency.amount
 					showPlayer = true
 				end
 				
@@ -284,30 +356,32 @@ function XANORDH:displayList()
 					label.timers[i]:Hide()
 				end
 				
+				--TODO: show building shipments as resources next to the garrison resources
+				
 				--now lets do the timers
 				-->>>Followers (unit squads and such)
-				if v.info.followers then
-					for i = 1, #v.info.followers do
+				if v.info[garrisonType].followers then
+					for i = 1, #v.info[garrisonType].followers do
 						iCount = iCount + 1
 						label.timers[iCount].AltDone:Hide()
 						label.timers[iCount].isComplete = false
 						label.timers[iCount]:SetScript("OnEnter", Swipe_OnEnter)
 						label.timers[iCount]:SetScript("OnLeave", Swipe_OnLeave)
 						label.timers[iCount].Swipe:SetScript("OnCooldownDone", Swipe_OnDone)
-						label.timers[iCount].Icon:SetTexture(v.info.followers[i].texture) --SetPortraitToTexture doesn't work with Followers
+						label.timers[iCount].Icon:SetTexture(v.info[garrisonType].followers[i].texture) --SetPortraitToTexture doesn't work with Followers
 						label.timers[iCount].Icon:SetDesaturated(true)
 						label.timers[iCount]:Show()
 						
-						local readyCount = v.info.followers[i].shipmentsReady or 0
-						local totalCount = v.info.followers[i].shipmentsTotal or 0
-						local duration = v.info.followers[i].duration or 0
-						local creationTime = v.info.followers[i].creationTime or 0
+						local readyCount = v.info[garrisonType].followers[i].shipmentsReady or 0
+						local totalCount = v.info[garrisonType].followers[i].shipmentsTotal or 0
+						local duration = v.info[garrisonType].followers[i].duration or 0
+						local creationTime = v.info[garrisonType].followers[i].creationTime or 0
 						local timeLeft = (creationTime + duration) - GetServerTime()
 						if timeLeft < 0 then timeLeft = 0 end
 						
 						label.timers[iCount].ShowCountOnComplete = false
 						label.timers[iCount].Count:SetFormattedText(GARRISON_LANDING_SHIPMENT_COUNT, readyCount, totalCount)
-						label.timers[iCount].TooltipTitle = v.info.followers[i].name or nil
+						label.timers[iCount].TooltipTitle = v.info[garrisonType].followers[i].name or nil
 						label.timers[iCount].TooltipMSG = "|cFFFFFFFF"..TIME_REMAINING.."|r "..tostring(SecondsToTime(timeLeft))
 						label.timers[iCount].TooltipMSG2 = format(GARRISON_LANDING_COMPLETED, readyCount, totalCount)
 						label.timers[iCount].TooltipMSG3 = nil
@@ -326,28 +400,28 @@ function XANORDH:displayList()
 				end
 				
 				-->>>Shipments
-				if v.info.shipments then
-					for i = 1, #v.info.shipments do
+				if v.info[garrisonType].shipments then
+					for i = 1, #v.info[garrisonType].shipments do
 						iCount = iCount + 1
 						label.timers[iCount].AltDone:Hide()
 						label.timers[iCount].isComplete = false
 						label.timers[iCount]:SetScript("OnEnter", Swipe_OnEnter)
 						label.timers[iCount]:SetScript("OnLeave", Swipe_OnLeave)
 						label.timers[iCount].Swipe:SetScript("OnCooldownDone", Swipe_OnDone)
-						SetPortraitToTexture(label.timers[iCount].Icon, v.info.shipments[i].texture)
+						SetPortraitToTexture(label.timers[iCount].Icon, v.info[garrisonType].shipments[i].texture)
 						label.timers[iCount].Icon:SetDesaturated(true)
 						label.timers[iCount]:Show()
 						
-						local readyCount = v.info.shipments[i].shipmentsReady or 0
-						local totalCount = v.info.shipments[i].shipmentsTotal or 0
-						local duration = v.info.shipments[i].duration or 0
-						local creationTime = v.info.shipments[i].creationTime or 0
+						local readyCount = v.info[garrisonType].shipments[i].shipmentsReady or 0
+						local totalCount = v.info[garrisonType].shipments[i].shipmentsTotal or 0
+						local duration = v.info[garrisonType].shipments[i].duration or 0
+						local creationTime = v.info[garrisonType].shipments[i].creationTime or 0
 						local timeLeft = (creationTime + duration) - GetServerTime()
 						if timeLeft < 0 then timeLeft = 0 end
 						
 						label.timers[iCount].ShowCountOnComplete = false
 						label.timers[iCount].Count:SetFormattedText(GARRISON_LANDING_SHIPMENT_COUNT, readyCount, totalCount)
-						label.timers[iCount].TooltipTitle = v.info.shipments[i].name or nil
+						label.timers[iCount].TooltipTitle = v.info[garrisonType].shipments[i].name or nil
 						label.timers[iCount].TooltipMSG = "|cFFFFFFFF"..TIME_REMAINING.."|r "..tostring(SecondsToTime(timeLeft))
 						label.timers[iCount].TooltipMSG2 = format(GARRISON_LANDING_COMPLETED, readyCount, totalCount)
 						label.timers[iCount].TooltipMSG3 = nil
@@ -366,26 +440,26 @@ function XANORDH:displayList()
 				end
 				
 				-->>>Talents
-				if v.info.talents then
-					for i = 1, #v.info.talents do
+				if v.info[garrisonType].talents then
+					for i = 1, #v.info[garrisonType].talents do
 						iCount = iCount + 1
 						label.timers[iCount].AltDone:Hide()
 						label.timers[iCount].isComplete = false
 						label.timers[iCount]:SetScript("OnEnter", Swipe_OnEnter)
 						label.timers[iCount]:SetScript("OnLeave", Swipe_OnLeave)
 						label.timers[iCount].Swipe:SetScript("OnCooldownDone", Swipe_OnDone)
-						SetPortraitToTexture(label.timers[iCount].Icon, v.info.talents[i].texture)
+						SetPortraitToTexture(label.timers[iCount].Icon, v.info[garrisonType].talents[i].texture)
 						label.timers[iCount].Icon:SetDesaturated(true)
 						label.timers[iCount]:Show()
 						
-						local duration = v.info.talents[i].researchDuration or 0
-						local creationTime = v.info.talents[i].researchStartTime or 0
+						local duration = v.info[garrisonType].talents[i].researchDuration or 0
+						local creationTime = v.info[garrisonType].talents[i].researchStartTime or 0
 						local timeLeft = (creationTime + duration) - GetServerTime()
 						if timeLeft < 0 then timeLeft = 0 end
 						
 						label.timers[iCount].ShowCountOnComplete = false
 						label.timers[iCount].Count:SetText(nil)
-						label.timers[iCount].TooltipTitle = v.info.talents[i].name or nil
+						label.timers[iCount].TooltipTitle = v.info[garrisonType].talents[i].name or nil
 						label.timers[iCount].TooltipMSG = "|cFFFFFFFF"..TIME_REMAINING.."|r "..tostring(SecondsToTime(timeLeft))
 						label.timers[iCount].TooltipMSG2 = nil
 						label.timers[iCount].TooltipMSG3 = nil
@@ -405,22 +479,22 @@ function XANORDH:displayList()
 				end
 
 				-->>>In Progress Missions
-				if v.info.missions and v.info.missions.inProgress then
+				if v.info[garrisonType].missions and v.info[garrisonType].missions.inProgress then
 					local missionCount = 0
 					local missionCompleted = 0
 					local ceilMissionTime = 0
 					local ceilMissionTimeDuration = 0
 					
-					for i = 1, #v.info.missions.inProgress do
-						if v.info.missions.inProgress[i].name then
+					for i = 1, #v.info[garrisonType].missions.inProgress do
+						if v.info[garrisonType].missions.inProgress[i].name then
 							missionCount = missionCount + 1
 							
-							if v.info.missions.inProgress[i].missionEndTime then
-								if v.info.missions.inProgress[i].missionEndTime > ceilMissionTime then
-									ceilMissionTime = v.info.missions.inProgress[i].missionEndTime
-									ceilMissionTimeDuration = v.info.missions.inProgress[i].durationSeconds
+							if v.info[garrisonType].missions.inProgress[i].missionEndTime then
+								if v.info[garrisonType].missions.inProgress[i].missionEndTime > ceilMissionTime then
+									ceilMissionTime = v.info[garrisonType].missions.inProgress[i].missionEndTime
+									ceilMissionTimeDuration = v.info[garrisonType].missions.inProgress[i].durationSeconds
 								end
-								if v.info.missions.inProgress[i].missionEndTime <= GetServerTime() then
+								if v.info[garrisonType].missions.inProgress[i].missionEndTime <= GetServerTime() then
 									missionCompleted = missionCompleted + 1
 								end
 							end
@@ -460,7 +534,7 @@ function XANORDH:displayList()
 				end
 				
 				-->>>Current Missions Available
-				if v.info.missions and v.info.missions.currentMissions then
+				if v.info[garrisonType].missions and v.info[garrisonType].missions.currentMissions then
 					local missionCount = 0
 					local rightXOffset = 0
 					
@@ -473,8 +547,8 @@ function XANORDH:displayList()
 						rightXOffset = select(4, label.timers[1]:GetPoint())
 					end
 					
-					for i = 1, #v.info.missions.currentMissions do
-						if v.info.missions.currentMissions[i].name then
+					for i = 1, #v.info[garrisonType].missions.currentMissions do
+						if v.info[garrisonType].missions.currentMissions[i].name then
 							missionCount = missionCount + 1
 						end
 					end
@@ -525,7 +599,7 @@ function XANORDH:SetupCharList()
 	if self.CHListFrame then return end
 	
 	--get the current player data, we have to wait a second as sometimes there is a delay with data grab
-	XANORDH:Delay("getCurrentPlayerData", 0.5, function() XANORDH:displayList() end)
+	self:Delay("scanPlayerGarrisons", 0.5, function() self:displayList() end)
 	
 	local frame = CreateFrame("Frame", "xanOrderHallsCharList", GarrisonLandingPage)
 	self.CHListFrame = frame
@@ -573,6 +647,55 @@ function XANORDH:SetupCharList()
 
 end
 
+function XANORDH:CreateMenu()
+
+	local ddMenu = { { text = "Select an Option", notCheckable = true, isTitle = true} }
+		
+	if C_Garrison.HasGarrison(LE_GARRISON_TYPE_6_0) then
+		tinsert(ddMenu, { text = "|cFF20ff20(WoD)|r Garrison", notCheckable = true, func = function()
+			ShowGarrisonLandingPage(LE_GARRISON_TYPE_6_0)
+			GarrisonLandingPageTab_SetTab(GarrisonLandingPageTab1)
+		end }
+		)
+	else
+		tinsert(ddMenu, { text = "|cFF20ff20(WoD)|r Garrison", notCheckable = true, disabled = true}
+		)
+	end
+	
+	if C_Garrison.HasGarrison(LE_GARRISON_TYPE_7_0) then
+		tinsert(ddMenu, { text = "|cFF20ff20(Legion)|r Order Hall", notCheckable = true, func = function()
+			ShowGarrisonLandingPage(LE_GARRISON_TYPE_7_0)
+			GarrisonLandingPageTab_SetTab(GarrisonLandingPageTab1)
+		end }
+		)
+	else
+		tinsert(ddMenu, { text = "Order Hall (Not Unlocked)", notCheckable = true, disabled = true}
+		)
+	end
+	
+	if C_Garrison.HasGarrison(LE_GARRISON_TYPE_8_0) then
+		tinsert(ddMenu, { text = "|cFF20ff20(BfA)|r War Report", notCheckable = true, func = function()
+			ShowGarrisonLandingPage(LE_GARRISON_TYPE_8_0)
+			GarrisonLandingPageTab_SetTab(GarrisonLandingPageTab1)
+		end }
+		)
+	else
+		tinsert(ddMenu, { text = "War Report (Not Unlocked)", notCheckable = true, disabled = true}
+		)
+	end
+	
+	tinsert(ddMenu, { text = "|cFF20ff20Display Characters|r", notCheckable = true, func = function()
+		self:ShowCharList()
+	end }
+	)
+	
+	tinsert(ddMenu, { text = " ", notCheckable = true, disabled = true } )
+	tinsert(ddMenu, { text = "Cancel", notCheckable = true, func = function(self) self:Hide() end }
+	)
+
+	return ddMenu
+end
+
 function XANORDH:HookOrderHallFrame()
 	if self.CHListFrame then return end
 
@@ -583,15 +706,21 @@ function XANORDH:HookOrderHallFrame()
 		end
 	end)
 	
-	GarrisonLandingPageMinimapButton:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-	GarrisonLandingPageMinimapButton:HookScript("OnClick", function(self, button)
-		if button == "RightButton" then
-			XANORDH:ShowCharList()
+	GarrisonLandingPageMinimapButton:EnableMouse(true)
+	GarrisonLandingPageMinimapButton:SetScript("OnMouseUp",function(self, event, value)
+		if event == "RightButton" then
+			menuFrame:SetPoint("RIGHT", GarrisonLandingPageMinimapButton, "LEFT")
+			local ddMenu = XANORDH:CreateMenu()
+			EasyMenu(ddMenu, menuFrame, menuFrame, 0 , 0, "MENU")
+		end
+		if not _GarrisonLandingPageTab_SetTab then
+			_GarrisonLandingPageTab_SetTab = GarrisonLandingPageTab_SetTab
 		end
 		if GarrisonLandingPage.garrTypeID ~= 3 then
 			XANORDH:SetupCharList()
 		end
 	end)
+
 	
 	--force the GarrisonUI to load otherwise we cannot access the API and XML frames
 	LoadAddOn("Blizzard_GarrisonUI") 
@@ -608,7 +737,7 @@ function XANORDH:forceLoad(frame)
 	if frame:IsShown() then
 		self:HookOrderHallFrame()
 	else
-		frame:HookScript("OnShow", 	XANORDH.HookOrderHallFrame)
+		frame:HookScript("OnShow", 	self.HookOrderHallFrame)
 	end
 end
 
@@ -625,7 +754,7 @@ end
 --      Enable      --
 ----------------------
 local delayCount = {}
-local eventFrame = CreateFrame("frame","XCH_EventFrame",UIParent)
+local eventFrame = CreateFrame("frame", "XCH_EventFrame", UIParent)
 local spamCheck = false
 
 local events = {
@@ -668,7 +797,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
 	
 		if event ~= "SHIPMENT_UPDATE" or spamCheck then
 			--get the current player data, we have to wait a second as sometimes there is a delay with data grab
-			XANORDH:Delay(event, 0.5, function() XANORDH:getCurrentPlayerData() end)
+			XANORDH:Delay(event, 0.5, function() XANORDH:scanPlayerGarrisons() end)
 		end
 		
 		--we have to control SHIPMENT_UPDATE because it's spammed too much.  So lets only allow it once per every other event.
@@ -685,10 +814,11 @@ end)
 
 function XANORDH:ChatCommand(input)
 	ShowGarrisonLandingPage()
-	self:Delay("ChatCommand", 0.5, function() XANORDH:ShowCharList() end)
+	self:Delay("ChatCommand", 0.5, function() self:ShowCharList() end)
 end
 
 function XANORDH:OnEnable()
+	
 	self:setupDB()
 	self:HookOrderHallFrame()
 	

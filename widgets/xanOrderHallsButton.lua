@@ -120,12 +120,14 @@ local function Constructor()
 	
 	local timers = {}
 	local lastTimer
-	
+
 	for i = 1, 9 do
 		local swipe = CreateFrame("Frame", nil, frame, "GarrisonLandingPageReportShipmentStatusTemplate")
+		--swipe.Swipe:SetSwipeColor(53/255, 136/255, 1)
 		swipe:SetScale(42/64)
 		swipe:SetPoint("RIGHT", (40 -55*i) / swipe:GetScale(), 0)
 		swipe.Done:Hide()
+		--swipe.Done:SetColorTexture(53/255, 136/255, 1, 0.3)
 		swipe.BG:Show()
 		swipe.Border:Show()
 		swipe.Border:SetDrawLayer("BORDER", -1)
@@ -134,6 +136,7 @@ local function Constructor()
 		swipe.AltDone:SetSize(90.5, 90.5)
 		swipe.AltDone:SetPoint("CENTER")
 		swipe.AltDone:Hide()
+		--swipe.AltDone:SetColorTexture(53/255, 136/255, 1, 0.3)
 		swipe.Count:ClearAllPoints()
 		swipe.Count:SetPoint("CENTER")
 		swipe.Count:SetFont("Fonts\\FRIZQT__.TTF", 18, "THINOUTLINE")
