@@ -11,6 +11,8 @@ local playerClass
 local playerLevel
 local playerFaction
 local _GarrisonLandingPageTab_SetTab
+local _GarrisonLandingPageMinimapButton_OnClick
+local _GarrisonLandingPage_Toggle
 local menuFrame = CreateFrame("Frame", "xanOrderHall_DDMenu", UIParent, "UIDropDownMenuTemplate")
 
 local debugf = tekDebug and tekDebug:GetFrame("xanOrderHalls")
@@ -647,6 +649,27 @@ function XANORDH:SetupCharList()
 
 end
 
+function XANORDH:ForceRefresh(garrTypeID)
+	--GarrisonLandingPage.selectedTab = 1
+	--PanelTemplates_SelectTab(GarrisonLandingPageTab1)
+	--PanelTemplates_UpdateTabs(GarrisonLandingPageTab1)
+	--GarrisonLandingPage:UpdateUIToGarrisonType()
+	--GarrisonLandingPageReportList_Update()
+	--GarrisonLandingPageReportList_UpdateAvailable()
+
+	--hide our character panel
+	if garrTypeID then
+		self.CHListFrame:Hide()
+		PanelTemplates_DeselectTab(self.CHListFrame.Tab)
+	end
+	
+	GarrisonLandingPage.selectedTab = 1
+	_GarrisonLandingPageTab_SetTab(GarrisonLandingPageTab1)
+	C_Garrison.RequestLandingPageShipmentInfo()
+	GarrisonLandingPageReportList_UpdateItems()
+	PanelTemplates_SelectTab(GarrisonLandingPageTab1)
+end
+				
 function XANORDH:CreateMenu()
 
 	local ddMenu = { { text = "Select an Option", notCheckable = true, isTitle = true} }
@@ -654,33 +677,33 @@ function XANORDH:CreateMenu()
 	if C_Garrison.HasGarrison(LE_GARRISON_TYPE_6_0) then
 		tinsert(ddMenu, { text = "|cFF20ff20(WoD)|r Garrison", notCheckable = true, func = function()
 			ShowGarrisonLandingPage(LE_GARRISON_TYPE_6_0)
-			GarrisonLandingPageTab_SetTab(GarrisonLandingPageTab1)
+			XANORDH:Delay(event, 0.5, function() XANORDH:ForceRefresh(LE_GARRISON_TYPE_6_0) end)
 		end }
 		)
 	else
-		tinsert(ddMenu, { text = "|cFF20ff20(WoD)|r Garrison", notCheckable = true, disabled = true}
+		tinsert(ddMenu, { text = "Garrison (Not Unlocked)", notCheckable = true, disabled = true}
 		)
 	end
 	
 	if C_Garrison.HasGarrison(LE_GARRISON_TYPE_7_0) then
-		tinsert(ddMenu, { text = "|cFF20ff20(Legion)|r Order Hall", notCheckable = true, func = function()
+		tinsert(ddMenu, { text = "|cFF20ff20(Legion)|r Class Hall", notCheckable = true, func = function()
 			ShowGarrisonLandingPage(LE_GARRISON_TYPE_7_0)
-			GarrisonLandingPageTab_SetTab(GarrisonLandingPageTab1)
+			XANORDH:Delay(event, 0.5, function() XANORDH:ForceRefresh(LE_GARRISON_TYPE_7_0) end)
 		end }
 		)
 	else
-		tinsert(ddMenu, { text = "Order Hall (Not Unlocked)", notCheckable = true, disabled = true}
+		tinsert(ddMenu, { text = "Class Hall (Not Unlocked)", notCheckable = true, disabled = true}
 		)
 	end
 	
 	if C_Garrison.HasGarrison(LE_GARRISON_TYPE_8_0) then
-		tinsert(ddMenu, { text = "|cFF20ff20(BfA)|r War Report", notCheckable = true, func = function()
+		tinsert(ddMenu, { text = "|cFF20ff20(BfA)|r Missions", notCheckable = true, func = function()
 			ShowGarrisonLandingPage(LE_GARRISON_TYPE_8_0)
-			GarrisonLandingPageTab_SetTab(GarrisonLandingPageTab1)
+			XANORDH:Delay(event, 0.5, function() XANORDH:ForceRefresh(LE_GARRISON_TYPE_8_0) end)
 		end }
 		)
 	else
-		tinsert(ddMenu, { text = "War Report (Not Unlocked)", notCheckable = true, disabled = true}
+		tinsert(ddMenu, { text = "Missions (Not Unlocked)", notCheckable = true, disabled = true}
 		)
 	end
 	
@@ -706,12 +729,16 @@ function XANORDH:HookOrderHallFrame()
 		end
 	end)
 	
+	GarrisonLandingPageMinimapButton:SetScript("OnClick",function() end)
 	GarrisonLandingPageMinimapButton:EnableMouse(true)
 	GarrisonLandingPageMinimapButton:SetScript("OnMouseUp",function(self, event, value)
 		if event == "RightButton" then
 			menuFrame:SetPoint("RIGHT", GarrisonLandingPageMinimapButton, "LEFT")
 			local ddMenu = XANORDH:CreateMenu()
 			EasyMenu(ddMenu, menuFrame, menuFrame, 0 , 0, "MENU")
+		elseif event == "LeftButton" then
+			ShowGarrisonLandingPage(C_Garrison.GetLandingPageGarrisonType()) --show the standard current garrison page
+			XANORDH:ForceRefresh(C_Garrison.GetLandingPageGarrisonType())
 		end
 		if not _GarrisonLandingPageTab_SetTab then
 			_GarrisonLandingPageTab_SetTab = GarrisonLandingPageTab_SetTab
@@ -721,13 +748,13 @@ function XANORDH:HookOrderHallFrame()
 		end
 	end)
 
-	
 	--force the GarrisonUI to load otherwise we cannot access the API and XML frames
 	LoadAddOn("Blizzard_GarrisonUI") 
 	
 	if IsAddOnLoaded("Blizzard_GarrisonUI") then
 		self:SetupCharList()
 	end
+	
 end
 
 
@@ -820,6 +847,10 @@ end
 function XANORDH:OnEnable()
 	
 	self:setupDB()
+	
+	if (not GarrisonMissionFrame) then
+		Garrison_LoadUI()
+	end
 	self:HookOrderHallFrame()
 	
 	for k, v in pairs(events) do
