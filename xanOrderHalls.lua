@@ -1,6 +1,6 @@
 local XANORDH = select(2, ...) --grab the addon namespace
 XANORDH = LibStub("AceAddon-3.0"):NewAddon(XANORDH, "xanOrderHalls", "AceEvent-3.0", "AceConsole-3.0")
-local L = LibStub("AceLocale-3.0"):GetLocale("xanOrderHalls", true)
+local L = LibStub("AceLocale-3.0"):GetLocale("xanOrderHalls")
 local AceGUI = LibStub("AceGUI-3.0")
 
 local dbglobal
